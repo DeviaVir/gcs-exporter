@@ -15,7 +15,7 @@ ENV CGO_ENABLED 0
 RUN go get \
       -v \
       -ldflags "-X github.com/m-lab/go/prometheusx.GitShortCommit=$(git log -1 --format=%h)" \
-      github.com/m-lab/gcs-exporter
+      github.com/DeviaVir/gcs-exporter
 
 
 # Now copy the cbif binary into a minimal base image.
