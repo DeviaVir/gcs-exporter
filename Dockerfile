@@ -1,9 +1,9 @@
-FROM golang:1.13 as build
+FROM golang:1.14 as build
 # Must be enabled for "go test -race ..."
 ENV CGO_ENABLED 1
 ENV GOPATH /go
-COPY . /go/src/github.com/m-lab/gcs-exporter/
-WORKDIR /go/src/github.com/m-lab/gcs-exporter/
+COPY . /go/src/github.com/DeviaVir/gcs-exporter/
+WORKDIR /go/src/github.com/DeviaVir/gcs-exporter/
 # Get test dependencies & run tests.
 RUN go get -t -v ./
 RUN go get -t -v ./gcs/
