@@ -90,7 +90,7 @@ func listFiles(ctx context.Context, client *storage.Client, bucket string) (int,
 			return 0, 0, fmt.Errorf("Bucket(%q).Objects: %v", bucket, err)
 		}
 		files++
-		fmt.Println(fmt.Printf("Name: %v\n", attrs.Name))
+		//fmt.Println(fmt.Printf("Name: %v\n", attrs.Name))
 
 		o := client.Bucket(bucket).Object(attrs.Name)
 		objectAttrs, err := o.Attrs(ctx)
@@ -98,7 +98,7 @@ func listFiles(ctx context.Context, client *storage.Client, bucket string) (int,
 			updateErrors.WithLabelValues(bucket, "bucket-object").Inc()
 			return 0, 0, fmt.Errorf("Object(%q).Attrs: %v", attrs.Name, err)
 		}
-		fmt.Println(fmt.Printf("Size: %v\n", objectAttrs.Size))
+		//fmt.Println(fmt.Printf("Size: %v\n", objectAttrs.Size))
 		size += objectAttrs.Size
 	}
 	return files, size, nil
