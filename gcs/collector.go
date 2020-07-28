@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -42,6 +43,27 @@ var (
 		},
 		[]string{"bucket"},
 	)
+	promFolderFiles = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "gcs_folder_files_total",
+			Help: "GCS folder file count",
+		},
+		[]string{"bucket", "folder"},
+	)
+	promFolderBytes = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "gcs_folder_bytes_total",
+			Help: "GCS folder file bytes total",
+		},
+		[]string{"bucket", "folder"},
+	)
+	promFolderDate = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "gcs_folder_last_created_date_seconds",
+			Help: "GCS folder last created file unix timestamp",
+		},
+		[]string{"bucket", "folder"},
+	)
 )
 
 // Update runs the collector query and atomically updates the cached metrics.
@@ -49,18 +71,31 @@ func Update(ctx context.Context, client *storage.Client, bucket string) error {
 	start := time.Now()
 	log.Println("Starting to walk:", start.Format("2006/01/02"))
 
-	files, size, err := listFiles(ctx, client, bucket)
+	files, size, folderCount, folderSize, folderDate, err := listFiles(ctx, client, bucket)
 	promFiles.WithLabelValues(bucket).Set(float64(files))
 	promBytes.WithLabelValues(bucket).Set(float64(size))
+	for f, c := range folderCount {
+		promFolderFiles.WithLabelValues(bucket, f).Set(float64(c))
+	}
+	for f, s := range folderSize {
+		promFolderBytes.WithLabelValues(bucket, f).Set(float64(s))
+	}
+	for f, d := range folderDate {
+		promFolderDate.WithLabelValues(bucket, f).Set(float64(d))
+	}
 
 	log.Println("Total time to Update:", time.Since(start))
 	promLastUpdateDuration.WithLabelValues(bucket).Set(time.Since(start).Seconds())
 	return err
 }
 
-func listFiles(ctx context.Context, client *storage.Client, bucket string) (int, int64, error) {
+func listFiles(ctx context.Context, client *storage.Client, bucket string) (int, int64, map[string]int, map[string]int64, map[string]int64, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 	defer cancel()
+
+	folderCount := make(map[string]int)
+	folderSize := make(map[string]int64)
+	folderDate := make(map[string]int64)
 
 	it := client.Bucket(bucket).Objects(ctx, nil)
 	files := 0
@@ -72,19 +107,37 @@ func listFiles(ctx context.Context, client *storage.Client, bucket string) (int,
 		}
 		if err != nil {
 			promErrors.WithLabelValues(bucket, "bucket-objects").Inc()
-			return 0, 0, fmt.Errorf("Bucket(%q).Objects: %v", bucket, err)
+			return 0, 0, folderCount, folderSize, folderDate, fmt.Errorf("Bucket(%q).Objects: %v", bucket, err)
+		}
+
+		folder := filepath.Dir(attrs.Name)
+		if _, ok := folderCount[folder]; ok {
+			folderCount[folder]++
+		} else {
+			folderCount[folder] = 1
 		}
 		files++
-		//fmt.Println(fmt.Printf("Name: %v\n", attrs.Name))
 
 		o := client.Bucket(bucket).Object(attrs.Name)
 		objectAttrs, err := o.Attrs(ctx)
 		if err != nil {
 			promErrors.WithLabelValues(bucket, "bucket-object").Inc()
-			return 0, 0, fmt.Errorf("Object(%q).Attrs: %v", attrs.Name, err)
+			return 0, 0, folderCount, folderSize, folderDate, fmt.Errorf("Object(%q).Attrs: %v", attrs.Name, err)
 		}
-		//fmt.Println(fmt.Printf("Size: %v\n", objectAttrs.Size))
+		if _, ok := folderSize[folder]; ok {
+			folderSize[folder] += objectAttrs.Size
+		} else {
+			folderSize[folder] = objectAttrs.Size
+		}
 		size += objectAttrs.Size
+
+		if _, ok := folderDate[folder]; ok {
+			if folderDate[folder] < attrs.Created.Unix() {
+				folderDate[folder] = attrs.Created.Unix()
+			}
+		} else {
+			folderDate[folder] = attrs.Created.Unix()
+		}
 	}
-	return files, size, nil
+	return files, size, folderCount, folderSize, folderDate, nil
 }

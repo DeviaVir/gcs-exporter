@@ -5,8 +5,7 @@ ENV GOPATH /go
 COPY . /go/src/github.com/DeviaVir/gcs-exporter/
 WORKDIR /go/src/github.com/DeviaVir/gcs-exporter/
 # Get test dependencies & run tests.
-RUN go get -t -v ./
-RUN go get -t -v ./gcs/
+RUN go mod tidy
 RUN go test -race -v ./...
 
 # Build a fully statically linked image.
