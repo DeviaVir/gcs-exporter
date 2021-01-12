@@ -17,5 +17,7 @@ gcs_folder_last_created_date_seconds{bucket="bucket",folder="example/path"} 1.59
 ## Usage
 
 ```
-docker run -it --rm deviavir/gcs-exporter:v0.4 --prometheusx.listen-address=:9112 --source=<bucket-name> --time=60s
+docker run -it --rm deviavir/gcs-exporter:v0.7 --prometheusx.listen-address=:9112 --source=<bucket-name> --time=60s
 ```
+
+When reading multiple bucket, make sure to duplicate `source` and `time` for each.

@@ -106,6 +106,7 @@ func listFiles(ctx context.Context, client *storage.Client, bucket string) (int,
 			break
 		}
 		if err != nil {
+			fmt.Println(err)
 			promErrors.WithLabelValues(bucket, "bucket-objects").Inc()
 			return 0, 0, folderCount, folderSize, folderDate, fmt.Errorf("Bucket(%q).Objects: %v", bucket, err)
 		}
@@ -121,6 +122,7 @@ func listFiles(ctx context.Context, client *storage.Client, bucket string) (int,
 		o := client.Bucket(bucket).Object(attrs.Name)
 		objectAttrs, err := o.Attrs(ctx)
 		if err != nil {
+			fmt.Println(err)
 			promErrors.WithLabelValues(bucket, "bucket-object").Inc()
 			return 0, 0, folderCount, folderSize, folderDate, fmt.Errorf("Object(%q).Attrs: %v", attrs.Name, err)
 		}
