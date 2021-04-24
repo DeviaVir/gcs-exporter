@@ -72,6 +72,12 @@ func Update(ctx context.Context, client *storage.Client, bucket string) error {
 	log.Println("Starting to walk:", start.Format("2006/01/02"))
 
 	files, size, folderCount, folderSize, folderDate, err := listFiles(ctx, client, bucket)
+	if err != nil {
+		// if we hit an error while collecting metrics, better to not update these
+		// values to false positives.
+		log.Println(err)
+		return nil
+	}
 	promFiles.WithLabelValues(bucket).Set(float64(files))
 	promBytes.WithLabelValues(bucket).Set(float64(size))
 	for f, c := range folderCount {
@@ -86,7 +92,7 @@ func Update(ctx context.Context, client *storage.Client, bucket string) error {
 
 	log.Println("Total time to Update:", time.Since(start))
 	promLastUpdateDuration.WithLabelValues(bucket).Set(time.Since(start).Seconds())
-	return err
+	return nil
 }
 
 func listFiles(ctx context.Context, client *storage.Client, bucket string) (int, int64, map[string]int, map[string]int64, map[string]int64, error) {
@@ -106,7 +112,6 @@ func listFiles(ctx context.Context, client *storage.Client, bucket string) (int,
 			break
 		}
 		if err != nil {
-			fmt.Println(err)
 			promErrors.WithLabelValues(bucket, "bucket-objects").Inc()
 			return 0, 0, folderCount, folderSize, folderDate, fmt.Errorf("Bucket(%q).Objects: %v", bucket, err)
 		}
@@ -119,20 +124,6 @@ func listFiles(ctx context.Context, client *storage.Client, bucket string) (int,
 		}
 		files++
 
-		o := client.Bucket(bucket).Object(attrs.Name)
-		objectAttrs, err := o.Attrs(ctx)
-		if err != nil {
-			fmt.Println(err)
-			promErrors.WithLabelValues(bucket, "bucket-object").Inc()
-			return 0, 0, folderCount, folderSize, folderDate, fmt.Errorf("Object(%q).Attrs: %v", attrs.Name, err)
-		}
-		if _, ok := folderSize[folder]; ok {
-			folderSize[folder] += objectAttrs.Size
-		} else {
-			folderSize[folder] = objectAttrs.Size
-		}
-		size += objectAttrs.Size
-
 		if _, ok := folderDate[folder]; ok {
 			if folderDate[folder] < attrs.Created.Unix() {
 				folderDate[folder] = attrs.Created.Unix()
@@ -140,6 +131,13 @@ func listFiles(ctx context.Context, client *storage.Client, bucket string) (int,
 		} else {
 			folderDate[folder] = attrs.Created.Unix()
 		}
+
+		if _, ok := folderSize[folder]; ok {
+			folderSize[folder] += attrs.Size
+		} else {
+			folderSize[folder] = attrs.Size
+		}
+		size += attrs.Size
 	}
 	return files, size, folderCount, folderSize, folderDate, nil
 }
